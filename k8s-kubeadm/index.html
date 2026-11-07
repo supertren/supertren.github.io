@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalar Kubernetes con kubeadm — tutorial paso a paso</title>
+<meta name="description" content="Tutorial breve para instalar un clúster Kubernetes con kubeadm por línea de comandos, indicando en qué nodo se ejecuta cada comando.">
+<link rel="icon" href="../favicon-32.png">
+<style>
+:root{
+  --bg:#fafaf7;--fg:#22221f;--muted:#6b6a64;--card:#fff;--line:#e3e1d8;
+  --code-bg:#1e1f22;--code-fg:#e8e6df;
+  --all:#5f5e5a;--all-bg:#f1efe8;
+  --master:#534ab7;--master-bg:#eeedfe;
+  --worker:#0f6e56;--worker-bg:#e1f5ee;
+  --tip:#854f0b;--tip-bg:#faeeda;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#18181a;--fg:#ecebe6;--muted:#a3a29b;--card:#222225;--line:#36363a;
+    --code-bg:#0f0f11;--code-fg:#e8e6df;
+    --all:#d3d1c7;--all-bg:#2c2c2a;
+    --master:#cecbf6;--master-bg:#2e2a5c;
+    --worker:#9fe1cb;--worker-bg:#0d3a30;
+    --tip:#fac775;--tip-bg:#3a2a10;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:40px 20px 80px}
+h1{font-size:2rem;line-height:1.2;margin:0 0 8px;font-weight:650}
+h2{font-size:1.35rem;margin:0 0 6px;font-weight:600}
+.lead{color:var(--muted);font-size:1.1rem;margin:0 0 28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin:22px 0}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;padding:3px 10px;border-radius:999px;margin-bottom:10px}
+.b-all{color:var(--all);background:var(--all-bg)}
+.b-master{color:var(--master);background:var(--master-bg)}
+.b-worker{color:var(--worker);background:var(--worker-bg)}
+.step{border-left:5px solid var(--line)}
+.step.all{border-left-color:var(--all)}
+.step.master{border-left-color:var(--master)}
+.step.worker{border-left-color:var(--worker)}
+.cmd{margin:16px 0 4px}
+.code{position:relative}
+pre{background:var(--code-bg);color:var(--code-fg);padding:14px 16px;border-radius:10px;overflow-x:auto;font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0}
+.copy{position:absolute;top:8px;right:8px;background:#3a3b40;color:#e8e6df;border:0;border-radius:6px;font-size:12px;padding:4px 9px;cursor:pointer;opacity:.85}
+.copy:hover{opacity:1}
+.explain{color:var(--muted);margin:6px 0 0;font-size:.95rem}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;background:var(--all-bg);padding:1px 5px;border-radius:4px}
+pre code{background:none;padding:0}
+.ascii{background:var(--all-bg);color:var(--fg);font-size:13px;margin:10px 0 4px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.s-master rect{fill:var(--master-bg);stroke:var(--master)}
+.s-master text{fill:var(--master)}
+.s-worker rect{fill:var(--worker-bg);stroke:var(--worker)}
+.s-worker text{fill:var(--worker)}
+.s-all rect{fill:var(--all-bg);stroke:var(--all)}
+.s-all text{fill:var(--all)}
+.s-inner rect{fill:var(--card);stroke:var(--line)}
+.s-inner text{fill:var(--fg)}
+.s-line{stroke:var(--muted);fill:none}
+.s-label{fill:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.tip{background:var(--tip-bg);color:var(--fg);border-radius:12px;padding:16px 18px;margin:22px 0}
+.tip strong{color:var(--tip)}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left}
+footer{color:var(--muted);font-size:.85rem;margin-top:40px;text-align:center}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Instalar Kubernetes con kubeadm</h1>
+<p class="lead">Tutorial breve por línea de comandos para montar un clúster con <strong>1 master</strong> y <strong>2 workers</strong> en Ubuntu/Debian. Cada comando indica en qué nodo se lanza.</p>
+
+<div class="card">
+  <h2>El clúster que vamos a montar</h2>
+  <svg viewBox="0 0 680 430" role="img" aria-label="Arquitectura: master con apiserver, etcd, scheduler y controller-manager; dos workers con kubelet, kube-proxy y containerd; red Flannel que une todos los nodos">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="currentColor" stroke-width="1.6" class="s-line"/></marker></defs>
+    <g class="s-master"><rect x="20" y="20" width="640" height="120" rx="16" stroke-width="1.2"/><text x="40" y="48" font-size="15" font-weight="600">Master (control-plane)</text></g>
+    <g class="s-inner" font-size="13" text-anchor="middle">
+      <rect x="40" y="70" width="140" height="48" rx="8"/><text x="110" y="99">kube-apiserver</text>
+      <rect x="196" y="70" width="140" height="48" rx="8"/><text x="266" y="99">etcd</text>
+      <rect x="352" y="70" width="140" height="48" rx="8"/><text x="422" y="99">scheduler</text>
+      <rect x="508" y="70" width="136" height="48" rx="8"/><text x="576" y="99">controller-manager</text>
+    </g>
+    <line class="s-line" x1="175" y1="222" x2="175" y2="146" stroke-width="1.4" marker-end="url(#ar)"/>
+    <text class="s-label" x="186" y="188" font-size="13">kubeadm join</text>
+    <line class="s-line" x1="505" y1="222" x2="505" y2="146" stroke-width="1.4" marker-end="url(#ar)"/>
+    <text class="s-label" x="516" y="188" font-size="13">kubeadm join</text>
+    <g class="s-worker"><rect x="20" y="226" width="310" height="110" rx="16" stroke-width="1.2"/><text x="40" y="254" font-size="15" font-weight="600">Worker 1</text></g>
+    <g class="s-worker"><rect x="350" y="226" width="310" height="110" rx="16" stroke-width="1.2"/><text x="370" y="254" font-size="15" font-weight="600">Worker 2</text></g>
+    <g class="s-inner" font-size="13" text-anchor="middle">
+      <rect x="36" y="272" width="90" height="46" rx="8"/><text x="81" y="300">kubelet</text>
+      <rect x="132" y="272" width="90" height="46" rx="8"/><text x="177" y="300">kube-proxy</text>
+      <rect x="228" y="272" width="90" height="46" rx="8"/><text x="273" y="300">containerd</text>
+      <rect x="366" y="272" width="90" height="46" rx="8"/><text x="411" y="300">kubelet</text>
+      <rect x="462" y="272" width="90" height="46" rx="8"/><text x="507" y="300">kube-proxy</text>
+      <rect x="558" y="272" width="90" height="46" rx="8"/><text x="603" y="300">containerd</text>
+    </g>
+    <g class="s-all"><rect x="20" y="360" width="640" height="48" rx="10" stroke-width="1"/><text x="340" y="389" font-size="14" text-anchor="middle">Red de pods (Flannel): conecta los pods de todos los nodos</text></g>
+  </svg>
+</div>
+
+<div class="card">
+  <h2>Orden de los pasos y dónde se ejecutan</h2>
+  <svg viewBox="0 0 680 110" role="img" aria-label="Pasos 1 a 3 en todos los nodos, 4 y 5 en el master, 6 en los workers, 7 en el master">
+    <defs><marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke-width="1.6" class="s-line"/></marker></defs>
+    <g class="s-all" text-anchor="middle"><rect x="10" y="20" width="140" height="66" rx="10"/><text x="80" y="48" font-size="15" font-weight="600">Pasos 1–3</text><text x="80" y="70" font-size="13">Todos los nodos</text></g>
+    <line class="s-line" x1="153" y1="53" x2="181" y2="53" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <g class="s-master" text-anchor="middle"><rect x="184" y="20" width="140" height="66" rx="10"/><text x="254" y="48" font-size="15" font-weight="600">Pasos 4–5</text><text x="254" y="70" font-size="13">Solo master</text></g>
+    <line class="s-line" x1="327" y1="53" x2="355" y2="53" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <g class="s-worker" text-anchor="middle"><rect x="358" y="20" width="140" height="66" rx="10"/><text x="428" y="48" font-size="15" font-weight="600">Paso 6</text><text x="428" y="70" font-size="13">Solo workers</text></g>
+    <line class="s-line" x1="501" y1="53" x2="529" y2="53" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <g class="s-master" text-anchor="middle"><rect x="532" y="20" width="140" height="66" rx="10"/><text x="602" y="48" font-size="15" font-weight="600">Paso 7</text><text x="602" y="70" font-size="13">Solo master</text></g>
+  </svg>
+  <div class="legend">
+    <span class="badge b-all">🖥️ Todos los nodos</span>
+    <span class="badge b-master">👑 Solo master</span>
+    <span class="badge b-worker">⚙️ Solo workers</span>
+  </div>
+</div>
+
+<!-- PASO 1 -->
+<section class="card step all">
+  <span class="badge b-all">🖥️ Todos los nodos</span>
+  <h2>Paso 1. Preparar el sistema</h2>
+  <pre class="ascii">[ MASTER ✔ ]   [ WORKER 1 ✔ ]   [ WORKER 2 ✔ ]</pre>
+
+  <div class="cmd code"><pre><code>sudo swapoff -a
+sudo sed -i '/ swap / s/^/#/' /etc/fstab</code></pre></div>
+  <p class="explain">Desactiva la swap ahora y también tras reiniciar. El kubelet no arranca con la swap activada, porque necesita controlar la memoria con precisión.</p>
+
+  <div class="cmd code"><pre><code>cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay &amp;&amp; sudo modprobe br_netfilter</code></pre></div>
+  <p class="explain">Carga dos módulos del kernel: <code>overlay</code>, el sistema de ficheros por capas de los contenedores, y <code>br_netfilter</code>, que hace que iptables vea el tráfico de los puentes de red de los pods.</p>
+
+  <div class="cmd code"><pre><code>cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system</code></pre></div>
+  <p class="explain">Activa el reenvío de paquetes (IP forwarding) y el filtrado en los puentes, para que el tráfico circule entre pods y entre nodos.</p>
+</section>
+
+<!-- PASO 2 -->
+<section class="card step all">
+  <span class="badge b-all">🖥️ Todos los nodos</span>
+  <h2>Paso 2. Instalar el runtime de contenedores (containerd)</h2>
+  <pre class="ascii">kubelet ──ordena──▶ containerd ──arranca──▶ 📦 contenedores</pre>
+
+  <div class="cmd code"><pre><code>sudo apt-get update &amp;&amp; sudo apt-get install -y containerd</code></pre></div>
+  <p class="explain">Instala containerd, el programa que descarga las imágenes y ejecuta los contenedores.</p>
+
+  <div class="cmd code"><pre><code>sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd &amp;&amp; sudo systemctl enable containerd</code></pre></div>
+  <p class="explain">Genera la configuración por defecto y activa <code>SystemdCgroup</code>, para que containerd y el kubelet gestionen los recursos (cgroups) de la misma forma. Después reinicia el servicio y lo configura para que arranque con el sistema.</p>
+</section>
+
+<!-- PASO 3 -->
+<section class="card step all">
+  <span class="badge b-all">🖥️ Todos los nodos</span>
+  <h2>Paso 3. Instalar kubeadm, kubelet y kubectl</h2>
+  <table>
+    <tr><th>Herramienta</th><th>Para qué sirve</th></tr>
+    <tr><td><code>kubeadm</code></td><td>Monta el clúster (<code>init</code> / <code>join</code>)</td></tr>
+    <tr><td><code>kubelet</code></td><td>Agente que vive en cada nodo y arranca los pods</td></tr>
+    <tr><td><code>kubectl</code></td><td>Tu “mando a distancia” para manejar el clúster</td></tr>
+  </table>
+
+  <div class="cmd code"><pre><code>K8S=v1.34   # cámbialo por la versión estable actual
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/$K8S/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$K8S/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list</code></pre></div>
+  <p class="explain">Añade el repositorio oficial de Kubernetes y su clave de firma.</p>
+
+  <div class="cmd code"><pre><code>sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl</code></pre></div>
+  <p class="explain">Instala las tres herramientas y las bloquea con <code>hold</code>, para que un <code>apt upgrade</code> no las actualice por su cuenta y rompa el clúster.</p>
+</section>
+
+<!-- PASO 4 -->
+<section class="card step master">
+  <span class="badge b-master">👑 Solo master</span>
+  <h2>Paso 4. Inicializar el clúster</h2>
+  <pre class="ascii">[ MASTER ]  ← kubeadm init crea aquí el "cerebro":
+              apiserver + etcd + scheduler + controller-manager</pre>
+
+  <div class="cmd code"><pre><code>sudo kubeadm init --pod-network-cidr=10.244.0.0/16</code></pre></div>
+  <p class="explain">Crea el control-plane: genera los certificados, arranca los componentes del master y define el rango de IPs de los pods (el que usa Flannel). <strong>Al terminar muestra un comando <code>kubeadm join …</code>: cópialo, porque lo necesitarás en el paso 6.</strong></p>
+
+  <div class="cmd code"><pre><code>mkdir -p $HOME/.kube
+sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config</code></pre></div>
+  <p class="explain">Copia las credenciales de administrador a tu usuario para que <code>kubectl</code> pueda hablar con el clúster sin usar <code>sudo</code>.</p>
+</section>
+
+<!-- PASO 5 -->
+<section class="card step master">
+  <span class="badge b-master">👑 Solo master</span>
+  <h2>Paso 5. Instalar la red de pods (Flannel)</h2>
+  <pre class="ascii">📦 pod ◀═══ Flannel ═══▶ 📦 pod
+(nodo A)               (nodo B)</pre>
+
+  <div class="cmd code"><pre><code>kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml</code></pre></div>
+  <p class="explain">Despliega Flannel, que crea una red virtual para que los pods se comuniquen aunque estén en nodos distintos. Mientras no haya red de pods, los nodos aparecen como <code>NotReady</code>. Como Flannel es un DaemonSet, se instala solo en los workers cuando estos se unen.</p>
+</section>
+
+<!-- PASO 6 -->
+<section class="card step worker">
+  <span class="badge b-worker">⚙️ Solo en cada worker</span>
+  <h2>Paso 6. Unir los workers al clúster</h2>
+  <pre class="ascii">[ WORKER 1 ] ──join──▶ [ MASTER ] ◀──join── [ WORKER 2 ]</pre>
+
+  <div class="cmd code"><pre><code>sudo kubeadm join &lt;IP_MASTER&gt;:6443 --token &lt;token&gt; \
+  --discovery-token-ca-cert-hash sha256:&lt;hash&gt;</code></pre></div>
+  <p class="explain">Conecta el worker al apiserver (puerto 6443). El token sirve para autenticarse y el hash garantiza que el worker se une al master correcto.</p>
+
+  <p class="explain" style="margin-top:14px"><span class="badge b-master" style="margin:0 6px 0 0">👑 Solo master</span> Si perdiste el comando, genera uno nuevo:</p>
+  <div class="cmd code"><pre><code>kubeadm token create --print-join-command</code></pre></div>
+</section>
+
+<!-- PASO 7 -->
+<section class="card step master">
+  <span class="badge b-master">👑 Solo master</span>
+  <h2>Paso 7. Comprobar que todo funciona</h2>
+
+  <div class="cmd code"><pre><code>kubectl get nodes</code></pre></div>
+  <p class="explain">Lista los nodos. Todos deben aparecer en estado <code>Ready</code>:</p>
+  <pre class="ascii">NAME      STATUS   ROLES           VERSION
+master    Ready    control-plane   v1.34.x
+worker1   Ready    &lt;none&gt;          v1.34.x
+worker2   Ready    &lt;none&gt;          v1.34.x</pre>
+
+  <div class="cmd code"><pre><code>kubectl get pods -A</code></pre></div>
+  <p class="explain">Muestra los pods del sistema (coredns, flannel, kube-proxy…). Todos deberían estar en estado <code>Running</code>.</p>
+</section>
+
+<div class="tip">
+  <strong>💡 ¿Solo tienes un nodo?</strong> Por defecto el master no ejecuta pods de aplicaciones. Para permitirlo, lanza esto en el master:
+  <div class="cmd code"><pre><code>kubectl taint nodes --all node-role.kubernetes.io/control-plane-</code></pre></div>
+</div>
+
+<div class="tip">
+  <strong>📌 Versión.</strong> Antes de empezar, consulta la versión estable actual en <a href="https://kubernetes.io/releases/">kubernetes.io/releases</a> y ponla en la variable <code>K8S=</code> del paso 3.
+</div>
+
+<footer>Tutorial de instalación de Kubernetes con kubeadm · supertren.github.io</footer>
+</main>
+<script>
+document.querySelectorAll('.code').forEach(function(box){
+  var btn=document.createElement('button');
+  btn.className='copy';btn.type='button';btn.textContent='Copiar';
+  btn.addEventListener('click',function(){
+    var txt=box.querySelector('code').innerText;
+    var done=function(){btn.textContent='¡Copiado!';setTimeout(function(){btn.textContent='Copiar'},1500)};
+    if(navigator.clipboard){navigator.clipboard.writeText(txt).then(done,function(){})}
+  });
+  box.appendChild(btn);
+});
+</script>
+</body>
+</html>
